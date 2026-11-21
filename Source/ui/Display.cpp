@@ -4,9 +4,11 @@ namespace stdc
 {
 
 //==============================================================================
-HistoryReader::HistoryReader (const LevelHistory& h, int capacity) : history (h)
+HistoryReader::HistoryReader (const LevelHistory& h, int capacity, float releaseDbPerSecond)
+    : history (h), releaseDb (releaseDbPerSecond)
 {
-    frames.assign ((size_t) juce::jmax (16, capacity), LevelHistory::Frame {});
+    // power of two: absolute indices keep mapping to the same slots when the counter wraps
+    frames.assign ((size_t) juce::nextPowerOfTwo (juce::jlimit (16, LevelHistory::kSize, capacity)), LevelHistory::Frame {});
 }
 
 int HistoryReader::update()
@@ -15,14 +17,106 @@ int HistoryReader::update()
     const uint32_t cap = (uint32_t) juce::jmin ((int) frames.size(), LevelHistory::kSize - 64);
     if (! primed) { last = w > cap ? w - cap : 0u; primed = true; }
     if (w - last > cap) last = w - cap;
+    const float fall = releaseDb > 0.0f ? (float) ((double) releaseDb / juce::jmax (1.0, history.getFrameRate())) : 0.0f;
     int count = 0;
     for (; last != w; ++last, ++count)
     {
-        frames[(size_t) head] = history.read (last);
-        head = (head + 1) % (int) frames.size();
+        auto f = history.read (last);
+        if (fall > 0.0f)
+        {
+            // fast eased attack (keeps hits sharp, takes the frame-to-frame jitter off the floor), steady release
+            auto follow = [fall] (float e, float x) { return x > e ? e + 0.72f * (x - e) : juce::jmax (x, e - fall); };
+            env.inDb = follow (env.inDb, f.inDb);
+            env.outDb = follow (env.outDb, f.outDb);
+            f.inDb = env.inDb;
+            f.outDb = env.outDb;
+        }
+        frames[(size_t) (last % (uint32_t) frames.size())] = f;
         filled = juce::jmin (filled + 1, (int) frames.size());
     }
     return count;
+}
+
+//==============================================================================
+double SmoothScroll::update (double dt, uint32_t newestEnd, double frameRate)
+{
+    const double end = (double) newestEnd;
+    if (! started)
+    {
+        position = end - lag;
+        lastEnd = end;
+        started = true;
+        return position;
+    }
+
+    // how bursty the audio is: the lag follows the biggest jump seen recently (one host block), plus a margin
+    const double burst = end - lastEnd;
+    lastEnd = end;
+    lag = juce::jmax (lag * 0.995, juce::jlimit (2.0, 200.0, burst + 2.0));
+
+    const double target = end - lag;
+    if (std::abs (target - position) > 400.0) { position = target; return position; }   // jumped (transport, reset)
+    if (burst <= 0.0 && position >= end - 1.0) return position;                           // audio stopped: hold still
+
+    position += dt * frameRate;                                       // glide at the frame rate
+    position += (target - position) * juce::jmin (1.0, dt * 3.0);    // and drift gently onto the target
+    position = juce::jmin (position, end - 1.0);
+    return position;
+}
+
+void HistoryPaths::build (const HistoryReader& r, double position, float left, float right, double fpp,
+                          const std::function<float (float)>& levelY, const std::function<float (float)>& grY,
+                          float bottom, float grTop)
+{
+    inFill.clear(); outFill.clear(); outLine.clear(); grLine.clear(); grFill.clear();
+    any = false;
+    if (r.size() < 2 || right <= left) return;
+
+    // whole frames per bucket; buckets start at multiples of the bucket size (absolute index), so they never shift
+    const uint32_t bucket = (uint32_t) juce::jmax (1, juce::roundToInt (fpp));
+    const double oldestVisible = position - (double) (right - left) * fpp - (double) bucket;
+    const uint32_t first = (uint32_t) juce::jmax ((double) r.begin(), std::floor (juce::jmax (0.0, oldestVisible)));
+    const uint32_t lastFrame = (uint32_t) juce::jmax ((double) r.begin(), std::floor (position));   // newest frame drawn
+    if (lastFrame < first || lastFrame >= r.end()) return;
+
+    struct Pt { float x, in, out, gr; };
+    std::vector<Pt> pts;
+    pts.reserve ((size_t) (lastFrame - first) / bucket + 4);
+    for (uint32_t b = first - first % bucket; b <= lastFrame; b += bucket)
+    {
+        LevelHistory::Frame agg;
+        uint32_t n = 0;
+        for (uint32_t f = juce::jmax (b, first); f < b + bucket && f <= lastFrame; ++f, ++n)
+        {
+            const auto& x = r.at (f);
+            agg.inDb = juce::jmax (agg.inDb, x.inDb);
+            agg.outDb = juce::jmax (agg.outDb, x.outDb);
+            agg.grDb = juce::jmin (agg.grDb, x.grDb);
+        }
+        if (n == 0) continue;
+        const double centre = (double) b + (double) bucket * 0.5;
+        const float x = right - (float) ((position - juce::jmin (centre, position)) / fpp);
+        pts.push_back ({ x, levelY (agg.inDb), levelY (agg.outDb), grY (agg.grDb) });
+    }
+    if (pts.size() < 2) return;
+
+    const float x0 = pts.front().x, x1 = pts.back().x;
+    inFill.startNewSubPath (x0, bottom);
+    outFill.startNewSubPath (x0, bottom);
+    grFill.startNewSubPath (x0, grTop);
+    for (size_t i = 0; i < pts.size(); ++i)
+    {
+        const auto& p = pts[i];
+        inFill.lineTo (p.x, p.in);
+        outFill.lineTo (p.x, p.out);
+        grFill.lineTo (p.x, p.gr);
+        if (i == 0) { outLine.startNewSubPath (p.x, p.out); grLine.startNewSubPath (p.x, p.gr); }
+        else { outLine.lineTo (p.x, p.out); grLine.lineTo (p.x, p.gr); }
+    }
+    inFill.lineTo (x1, bottom); inFill.closeSubPath();
+    outFill.lineTo (x1, bottom); outFill.closeSubPath();
+    grFill.lineTo (x1, grTop); grFill.closeSubPath();
+    any = true;
 }
 
 LevelHistory::Frame HistoryReader::peakOfNewest (int n) const noexcept
@@ -74,14 +168,17 @@ namespace
     }
 }
 
-HistoryView::HistoryView (StDcProcessor& p) : proc (p), reader (p.getEngine().history, 4096)
+HistoryView::HistoryView (StDcProcessor& p) : proc (p), reader (p.getEngine().history, 4096, 260.0f)
 {
     setTooltip ("Level history: input (dark), output (light) and gain reduction (red). Drag the threshold handle.");
 }
 
-void HistoryView::tick (double)
+void HistoryView::tick (double dt)
 {
-    if (reader.update() > 0 || dragging) repaint();
+    reader.update();
+    const double before = scroll.getPosition();
+    const double pos = scroll.update (dt, reader.end(), reader.getFrameRate());
+    if (std::abs (pos - before) > 1.0e-3 || dragging) repaint();
 }
 
 juce::Rectangle<float> HistoryView::plot() const
@@ -126,50 +223,22 @@ void HistoryView::paint (juce::Graphics& g)
         g.drawText (juce::String ((int) db), juce::Rectangle<float> (r.getRight() - 28.0f, y - 7.0f, 26.0f, 14.0f), juce::Justification::centredRight, false);
     }
 
-    // ---- data: one column per pixel, newest at the right
-    const int W = juce::jmax (1, (int) r.getWidth() - 34);
+    // ---- data: newest at the right, gliding with the display clock
+    const float W = juce::jmax (1.0f, r.getWidth() - 34.0f);
     const double fpp = juce::jmax (0.05, (double) seconds * reader.getFrameRate() / (double) W);
-    const float x1 = r.getX() + (float) W;
-    juce::Path inP, outP, outLine, grP, grFill;
     const float bottom = inner.getBottom(), top = inner.getY();
-    inP.startNewSubPath (x1, bottom);
-    outP.startNewSubPath (x1, bottom);
-    grFill.startNewSubPath (x1, r.getY() - 2.0f);
-    const int available = reader.size();
-    double f0 = 0.0;
-    bool any = false;
-    for (int k = 0; k <= W; ++k)
-    {
-        const double f1 = f0 + fpp;
-        const int a = (int) f0, b = juce::jmax (a + 1, (int) f1);
-        if (b > available) break;
-        float in = -120.0f, out = -120.0f, gr = 0.0f;
-        for (int f = a; f < b; ++f)
-        {
-            const auto& fr = reader.get (f);
-            in = juce::jmax (in, fr.inDb);
-            out = juce::jmax (out, fr.outDb);
-            gr = juce::jmin (gr, fr.grDb);
-        }
-        f0 = f1;
-        const float x = x1 - (float) k;
-        const float yi = dbToY (in), yo = dbToY (out);
-        // GR hangs from the top on the levels' dB scale; with no reduction it tucks just above the edge (hidden)
-        const float depth = juce::jlimit (0.0f, rangeDb, -gr);
-        const float yg = juce::jmap (depth, 0.0f, rangeDb, top, bottom) - (top - r.getY() + 2.0f) * (1.0f - juce::jlimit (0.0f, 1.0f, depth / 0.5f));
-        inP.lineTo (x, yi);
-        outP.lineTo (x, yo);
-        if (! any) { outLine.startNewSubPath (x, yo); grP.startNewSubPath (x, yg); any = true; }
-        else { outLine.lineTo (x, yo); grP.lineTo (x, yg); }
-        grFill.lineTo (x, yg);
-        if (k == W || (int) (f0 + fpp) > available)
-        {
-            inP.lineTo (x, bottom); outP.lineTo (x, bottom); grFill.lineTo (x, r.getY() - 2.0f);
-        }
-    }
-    inP.closeSubPath(); outP.closeSubPath(); grFill.closeSubPath();
+    HistoryPaths paths;
+    paths.build (reader, scroll.getPosition(), r.getX() - 4.0f, r.getX() + W, fpp,
+                 [this] (float db) { return dbToY (db); },
+                 [&] (float gr)
+                 {
+                     // GR hangs from the top on the levels' dB scale; with no reduction it tucks above the edge (hidden)
+                     const float depth = juce::jlimit (0.0f, rangeDb, -gr);
+                     return juce::jmap (depth, 0.0f, rangeDb, top, bottom) - (top - r.getY() + 2.0f) * (1.0f - juce::jlimit (0.0f, 1.0f, depth / 0.5f));
+                 },
+                 bottom, r.getY() - 2.0f);
 
-    if (any)
+    if (paths.any)
     {
         g.saveState();
         g.reduceClipRegion (r.toNearestInt());
@@ -180,15 +249,15 @@ void HistoryView::paint (juce::Graphics& g)
             return grad;
         };
         g.setGradientFill (fade (inputFill()));
-        g.fillPath (inP);
+        g.fillPath (paths.inFill);
         g.setGradientFill (fade (outputFill()));
-        g.fillPath (outP);
+        g.fillPath (paths.outFill);
         g.setGradientFill (fade (outputLine()));
-        g.strokePath (outLine, juce::PathStrokeType (1.0f));
+        g.strokePath (paths.outLine, juce::PathStrokeType (1.1f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         g.setGradientFill (fade (style::grColour().withAlpha (0.13f)));
-        g.fillPath (grFill);
+        g.fillPath (paths.grFill);
         g.setGradientFill (fade (style::grColour()));
-        g.strokePath (grP, juce::PathStrokeType (1.7f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.strokePath (paths.grLine, juce::PathStrokeType (1.7f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         g.restoreState();
     }
 

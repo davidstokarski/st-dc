@@ -26,6 +26,7 @@ public:
 private:
     StDcProcessor& proc;
     HistoryReader reader;
+    SmoothScroll scroll;
     std::vector<std::unique_ptr<st::Knob>> knobs;
     juce::Rectangle<int> partArea, historyArea, powerArea;
     float gr = 0.0f;

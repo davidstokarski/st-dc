@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "ui/Strip.h"
+#include "ui/Display.h"
 #if JUCE_MAC
  #include <AudioToolbox/AudioToolbox.h>
 #endif
@@ -518,10 +519,64 @@ static void testAnalyzer()
     check (after < peak - 3.0f, "decays when audio stops");
 }
 
+/** The level display: the scroll glides at a steady speed although audio arrives in host-block bursts, and the level
+    line is a calm envelope instead of raw 4 ms peaks. */
+static void testHistoryMotion()
+{
+    std::cout << "Level display motion\n";
+    LevelHistory hist;
+    hist.setFrameRate (250.0);
+    HistoryReader raw (hist, 2048, 0.0f), smooth (hist, 2048, 260.0f);
+    SmoothScroll scroll;
+    juce::Random rng (7);
+    double audioClock = 0.0, uiClock = 0.0, framesDue = 0.0;
+    const double block = 1024.0 / 48000.0;   // host block: 1024 samples = 5.33 frames at a time
+    std::vector<double> steps;
+    double lastPos = 0.0, maxLag = 0.0;
+    for (int ui = 0; ui < 600; ++ui)
+    {
+        uiClock += 1.0 / 60.0;
+        while (audioClock + block <= uiClock)
+        {
+            audioClock += block;
+            framesDue += block * 250.0;
+            while (framesDue >= 1.0)
+            {
+                framesDue -= 1.0;
+                hist.push ({ -20.0f + 12.0f * (rng.nextFloat() - 0.5f), -18.0f + 12.0f * (rng.nextFloat() - 0.5f), -3.0f, -20.0f });
+            }
+        }
+        raw.update();
+        smooth.update();
+        const double pos = scroll.update (1.0 / 60.0, smooth.end(), 250.0);
+        if (ui > 120) { steps.push_back (pos - lastPos); maxLag = juce::jmax (maxLag, (double) smooth.end() - pos); }
+        lastPos = pos;
+    }
+    double mean = 0.0, worst = 0.0;
+    for (auto d : steps) mean += d;
+    mean /= (double) steps.size();
+    for (auto d : steps) worst = juce::jmax (worst, std::abs (d - mean));
+    std::cout << "  scroll: " << mean << " frames/UI frame, worst deviation " << worst << ", max lag " << maxLag << "\n";
+    check (std::abs (mean - 250.0 / 60.0) < 0.1, "scroll speed = frame rate (" + juce::String (mean, 3) + " frames per UI frame)");
+    check (worst < 0.6, "scroll glides evenly despite block bursts (worst deviation " + juce::String (worst, 3) + " frames)");
+    check (maxLag < 40.0, "display stays close behind the audio (" + juce::String (maxLag, 1) + " frames)");
+
+    auto roughness = [] (const HistoryReader& r)
+    {
+        double sum = 0.0;
+        for (int i = 1; i < 400; ++i) sum += std::abs (r.get (i).outDb - r.get (i - 1).outDb);
+        return sum / 399.0;
+    };
+    const double rr = roughness (raw), rs = roughness (smooth);
+    std::cout << "  roughness: " << rr << " -> " << rs << " dB per frame\n";
+    check (rs < rr * 0.45, "level line is an envelope, not raw peaks (" + juce::String (rr, 2) + " -> " + juce::String (rs, 2) + " dB per frame)");
+}
+
 static int runTests()
 {
     juce::ScopedJuceInitialiser_GUI gui;
     testAnalyzer();
+    testHistoryMotion();
     testCurves();
     testTiming();
     testNulls();

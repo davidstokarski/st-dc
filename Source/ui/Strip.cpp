@@ -8,7 +8,7 @@ namespace
     constexpr int partWidth = 104;
 }
 
-DcStrip::DcStrip (StDcProcessor& p) : proc (p), reader (p.getEngine().history, 1024)
+DcStrip::DcStrip (StDcProcessor& p) : proc (p), reader (p.getEngine().history, 1024, 260.0f)
 {
     const auto& t = st::Theme::get();
     auto make = [&] (const juce::String& id, const char* label)
@@ -56,6 +56,7 @@ void DcStrip::timerCallback()
 {
     // deepest reduction since the last tick, held then released smoothly (readable at 30 fps)
     const auto peak = reader.peakOfNewest (reader.update());
+    scroll.update (1.0 / 30.0, reader.end(), reader.getFrameRate());
     gr = peak.grDb < gr ? peak.grDb : gr + 0.25f * (peak.grDb - gr);
     repaint (historyArea.expanded (2));
     repaint (partArea);
@@ -106,41 +107,21 @@ void DcStrip::paint (juce::Graphics& g)
     g.fillRoundedRectangle (h, 5.0f);
     constexpr float range = 48.0f;
     auto yOf = [&] (float db) { return juce::jmap (juce::jlimit (-range, 0.0f, db), -range, 0.0f, h.getBottom() - 3.0f, h.getY() + 3.0f); };
-    const int W = juce::jmax (1, (int) h.getWidth());
-    const double fpp = 3.0 * reader.getFrameRate() / (double) W;   // 3 seconds
-    juce::Path in, out, grp;
-    in.startNewSubPath (h.getRight(), h.getBottom());
-    out.startNewSubPath (h.getRight(), h.getBottom());
-    double f0 = 0.0;
-    float lastX = h.getRight();
-    for (int k = 0; k < W; ++k)
-    {
-        const int a = (int) f0, b = juce::jmax (a + 1, (int) (f0 + fpp));
-        if (b > reader.size()) break;
-        f0 += fpp;
-        float li = -120.0f, lo = -120.0f, lg = 0.0f;
-        for (int f = a; f < b; ++f)
-        {
-            const auto& fr = reader.get (f);
-            li = juce::jmax (li, fr.inDb); lo = juce::jmax (lo, fr.outDb); lg = juce::jmin (lg, fr.grDb);
-        }
-        const float x = h.getRight() - (float) k;
-        lastX = x;
-        in.lineTo (x, yOf (li));
-        out.lineTo (x, yOf (lo));
-        const float yg = juce::jmap (juce::jlimit (0.0f, range, -lg), 0.0f, range, h.getY() + 3.0f, h.getBottom() - 3.0f);
-        if (k == 0) grp.startNewSubPath (x, yg); else grp.lineTo (x, yg);
-    }
-    in.lineTo (lastX, h.getBottom()); in.closeSubPath();
-    out.lineTo (lastX, h.getBottom()); out.closeSubPath();
+    const double fpp = 3.0 * reader.getFrameRate() / (double) juce::jmax (1.0f, h.getWidth());   // 3 seconds
+    HistoryPaths paths;
+    paths.build (reader, scroll.getPosition(), h.getX() - 2.0f, h.getRight(), fpp, yOf,
+                 [&] (float grDb) { return juce::jmap (juce::jlimit (0.0f, range, -grDb), 0.0f, range, h.getY() + 3.0f, h.getBottom() - 3.0f); },
+                 h.getBottom(), h.getY());
     g.saveState();
     g.reduceClipRegion (historyArea);
     g.setColour (t.textFaint.withAlpha (0.3f));
-    g.fillPath (in);
+    g.fillPath (paths.inFill);
     g.setColour (t.textDim.withAlpha (0.28f));
-    g.fillPath (out);
+    g.fillPath (paths.outFill);
+    g.setColour (t.text.withAlpha (0.45f));
+    g.strokePath (paths.outLine, juce::PathStrokeType (0.9f));
     g.setColour (style::grColour());
-    g.strokePath (grp, juce::PathStrokeType (1.4f));
+    g.strokePath (paths.grLine, juce::PathStrokeType (1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     const float ty = yOf (proc.apvts.getRawParameterValue (ids::threshold)->load());
     const float dashes[] = { 3.0f, 3.0f };
     g.setColour (t.accent.withAlpha (0.6f));

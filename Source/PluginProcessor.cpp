@@ -33,7 +33,7 @@ StDcProcessor::StDcProcessor()
 {
     refs.bind (apvts);
     registerFactoryPresets (presets);
-    stdc::style::applyTheme();   // dark wood identity
+    stdc::style::applyTheme();   // dark brown identity
     st::Knob::setDoubleClickEntersValue (true);   // Pro-style: double-click types a value, Cmd-click resets
     apvts.addParameterListener (ids::quality, this);
 }

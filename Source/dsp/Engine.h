@@ -11,7 +11,8 @@ class LevelHistory
 {
 public:
     static constexpr int kSize = 4096;   // ~16 s of frames
-    struct Frame { float inDb = -120.0f, outDb = -120.0f, grDb = 0.0f; };
+    /** One frame: input / output / detector peaks and the deepest gain reduction in it. */
+    struct Frame { float inDb = -120.0f, outDb = -120.0f, grDb = 0.0f, detDb = -120.0f; };
 
     void push (const Frame& f) noexcept
     {
@@ -20,19 +21,21 @@ public:
         slot[0].store (f.inDb, std::memory_order_relaxed);
         slot[1].store (f.outDb, std::memory_order_relaxed);
         slot[2].store (f.grDb, std::memory_order_relaxed);
+        slot[3].store (f.detDb, std::memory_order_relaxed);
         written.store (w + 1, std::memory_order_release);
     }
     uint32_t getWritten() const noexcept { return written.load (std::memory_order_acquire); }
     Frame read (uint32_t index) const noexcept
     {
         const auto& slot = frames[(size_t) (index & (kSize - 1))];
-        return { slot[0].load (std::memory_order_relaxed), slot[1].load (std::memory_order_relaxed), slot[2].load (std::memory_order_relaxed) };
+        return { slot[0].load (std::memory_order_relaxed), slot[1].load (std::memory_order_relaxed),
+                 slot[2].load (std::memory_order_relaxed), slot[3].load (std::memory_order_relaxed) };
     }
     void setFrameRate (double hz) noexcept { frameRate.store (hz); }
     double getFrameRate() const noexcept { return frameRate.load(); }
 
 private:
-    std::array<std::array<std::atomic<float>, 3>, kSize> frames {};
+    std::array<std::array<std::atomic<float>, 4>, kSize> frames {};
     std::atomic<uint32_t> written { 0 };
     std::atomic<double> frameRate { 250.0 };
 };
@@ -100,7 +103,7 @@ private:
 
     // history frame accumulation
     int frameLength = 192, frameCount = 0;
-    float frameIn = 0.0f, frameOut = 0.0f, frameGr = 0.0f;
+    float frameIn = 0.0f, frameOut = 0.0f, frameGr = 0.0f, frameDet = -120.0f;
 
     void updateSidechainFilter() noexcept;
 };

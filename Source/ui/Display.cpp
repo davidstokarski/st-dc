@@ -25,6 +25,40 @@ int HistoryReader::update()
     return count;
 }
 
+LevelHistory::Frame HistoryReader::peakOfNewest (int n) const noexcept
+{
+    LevelHistory::Frame f;
+    n = juce::jmin (n, filled);
+    for (int i = 0; i < n; ++i)
+    {
+        const auto& x = get (i);
+        f.inDb = juce::jmax (f.inDb, x.inDb);
+        f.outDb = juce::jmax (f.outDb, x.outDb);
+        f.detDb = juce::jmax (f.detDb, x.detDb);
+        f.grDb = juce::jmin (f.grDb, x.grDb);
+    }
+    return f;
+}
+
+bool LiveLevels::update (double dt, float releaseSeconds)
+{
+    const int n = reader.update();
+    const auto p = reader.peakOfNewest (n);   // n == 0: no audio -> everything falls back
+    const float k = (float) (1.0 - std::exp (-dt / (double) releaseSeconds));
+    auto follow = [k] (float& v, float target, bool rising)
+    {
+        const float before = v;
+        v = rising ? target : v + k * (target - v);
+        return std::abs (v - before) > 0.02f;
+    };
+    bool moved = false;
+    moved |= follow (grDb, p.grDb, p.grDb < grDb);
+    moved |= follow (detDb, p.detDb, p.detDb > detDb);
+    moved |= follow (inDb, p.inDb, p.inDb > inDb);
+    moved |= follow (outDb, p.outDb, p.outDb > outDb);
+    return moved;
+}
+
 //==============================================================================
 namespace
 {
@@ -180,15 +214,19 @@ void HistoryView::paint (juce::Graphics& g)
     {
         const auto algo = (int) proc.getAlgorithm();
         const auto& info = getAlgorithmInfo (algo);
-        auto row = juce::Rectangle<float> (r.getX() + 14.0f, 8.0f, r.getWidth() - 120.0f, 18.0f);
+        const juce::String name (info.name), sub (juce::String (juce::CharPointer_UTF8 ("\xc2\xb7  ")) + info.character);
+        const float w1 = st::fonts::stringWidth (st::fonts::semibold (13.0f), name);
+        const float w2 = st::fonts::stringWidth (st::fonts::regular (12.0f), sub);
+        auto row = juce::Rectangle<float> (r.getX() + 12.0f, 8.0f, w1 + w2 + 26.0f, 20.0f);
+        g.setColour (t.bg0.withAlpha (0.62f));
+        g.fillRoundedRectangle (row, 5.0f);
+        row.reduce (9.0f, 0.0f);
         g.setFont (st::fonts::semibold (13.0f));
         g.setColour (t.accent2);
-        const juce::String name (info.name);
         g.drawText (name, row, juce::Justification::centredLeft, false);
-        const float w = st::fonts::stringWidth (st::fonts::semibold (13.0f), name);
         g.setFont (st::fonts::regular (12.0f));
         g.setColour (t.textDim);
-        g.drawText (juce::String (juce::CharPointer_UTF8 ("\xc2\xb7  ")) + info.character, row.withTrimmedLeft (w + 8.0f), juce::Justification::centredLeft, false);
+        g.drawText (sub, row.withTrimmedLeft (w1 + 8.0f), juce::Justification::centredLeft, false);
     }
 }
 
@@ -266,7 +304,7 @@ namespace
 }
 
 SpectrumView::SpectrumView (StDcProcessor& p)
-    : proc (p), input (p.preAnalyzer, spectrumOptions()), output (p.postAnalyzer, spectrumOptions())
+    : proc (p), input (p.preAnalyzer, spectrumOptions()), output (p.postAnalyzer, spectrumOptions()), live (p.getEngine().history)
 {
     setTooltip ("Input spectrum. Red: what the compressor takes away right now. Drag the handle to high-pass the side-chain.");
 }
@@ -292,18 +330,15 @@ float SpectrumView::dbToY (float db) const
 juce::Rectangle<float> SpectrumView::handleBounds() const
 {
     const float hz = proc.apvts.getRawParameterValue (ids::scHighPass)->load();
-    return juce::Rectangle<float> (34.0f, 14.0f).withCentre ({ juce::jmax (22.0f, hzToX (hz)), 16.0f });
+    return juce::Rectangle<float> (34.0f, 14.0f).withCentre ({ juce::jmax (36.0f, hzToX (hz)), 16.0f });
 }
 
 void SpectrumView::tick (double dt)
 {
     bool changed = input.update (dt);
     changed |= output.update (dt);
-    const float g = proc.getEngine().grDb.load();
-    const float k = g < grSmoothed ? 0.6f : (float) (1.0 - std::exp (-dt / 0.15));
-    const float before = grSmoothed;
-    grSmoothed += k * (g - grSmoothed);
-    if (changed || std::abs (before - grSmoothed) > 0.01f) repaint();
+    changed |= live.update (dt, 0.2f);
+    if (changed) repaint();
 }
 
 void SpectrumView::paint (juce::Graphics& g)
@@ -372,18 +407,18 @@ void SpectrumView::paint (juce::Graphics& g)
         g.strokePath (top, juce::PathStrokeType (1.0f));
 
         // the compression: input minus the current gain reduction
-        if (grSmoothed < -0.05f)
+        if (live.grDb < -0.05f)
         {
             juce::Path reduced;
             for (int i = 0; i < n; ++i)
             {
                 const float x = hzToX (input.getFrequencyForPoint (i));
-                const float y = dbToY (lv[(size_t) i] + grSmoothed);
+                const float y = dbToY (lv[(size_t) i] + live.grDb);
                 if (i == 0) reduced.startNewSubPath (x, y); else reduced.lineTo (x, y);
             }
             band = top;
             for (int i = n - 1; i >= 0; --i)
-                band.lineTo (hzToX (input.getFrequencyForPoint (i)), dbToY (lv[(size_t) i] + grSmoothed));
+                band.lineTo (hzToX (input.getFrequencyForPoint (i)), dbToY (lv[(size_t) i] + live.grDb));
             band.closeSubPath();
             g.setColour (style::grColour().withAlpha (0.34f));
             g.fillPath (band);
@@ -402,13 +437,13 @@ void SpectrumView::paint (juce::Graphics& g)
     st::paint::pillHandle (g, hb, hover, dragging);
     g.setFont (st::fonts::medium (11.0f));
     g.setColour (hover || dragging ? t.text : t.textDim);
-    g.drawText ("SC HPF " + (hpfOn ? st::params::formatHz (hpf) : juce::String ("Off")),
+    g.drawText ("SC HPF  " + (hpfOn ? juce::String (juce::roundToInt (hpf)) + " Hz" : juce::String ("Off")),
                 juce::Rectangle<float> (hb.getRight() + 6.0f, hb.getY() - 1.0f, 120.0f, 16.0f), juce::Justification::centredLeft, false);
 
     // GR readout (right)
     g.setFont (st::fonts::semibold (11.0f));
-    g.setColour (grSmoothed < -0.05f ? style::grColour() : t.textFaint);
-    g.drawText ("GR " + st::params::formatDb (grSmoothed, 1, true, false), juce::Rectangle<float> (r.getRight() - 110.0f, 6.0f, 100.0f, 16.0f),
+    g.setColour (live.grDb < -0.05f ? style::grColour() : t.textFaint);
+    g.drawText ("GR " + st::params::formatDb (live.grDb, 1, true, false), juce::Rectangle<float> (r.getRight() - 110.0f, 6.0f, 100.0f, 16.0f),
                 juce::Justification::centredRight, false);
 }
 
@@ -453,7 +488,7 @@ void SpectrumView::mouseDoubleClick (const juce::MouseEvent& e)
 }
 
 //==============================================================================
-KneeView::KneeView (StDcProcessor& p) : proc (p)
+KneeView::KneeView (StDcProcessor& p) : proc (p), live (p.getEngine().history)
 {
     setTooltip ("Transfer curve of the running engine. The dot is the level the detector hears right now.");
 }
@@ -466,10 +501,9 @@ void KneeView::tick (double dt)
                          || differs (s.ratio, lastSettings.ratio) || differs (s.kneeDb, lastSettings.kneeDb)
                          || differs (s.rangeDb, lastSettings.rangeDb);
     if (changed) { lastSettings = s; curve.clear(); }
-    const float d = proc.getEngine().detectorDb.load();
-    const float before = liveDb;
-    liveDb = d > liveDb ? d : liveDb + (float) (1.0 - std::exp (-dt / 0.25)) * (d - liveDb);
-    if (changed || std::abs (before - liveDb) > 0.05f) repaint();
+    const bool moved = live.update (dt, 0.25f);
+    liveDb = live.detDb;
+    if (changed || moved) repaint();
 }
 
 void KneeView::rebuild (juce::Rectangle<float> a)
@@ -535,7 +569,7 @@ void KneeView::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-MeterView::MeterView (StDcProcessor& p) : proc (p)
+MeterView::MeterView (StDcProcessor& p) : proc (p), live (p.getEngine().history)
 {
     setTooltip ("Input, gain reduction and output (peak). Click to reset the hold values.");
 }
@@ -558,8 +592,8 @@ void MeterView::tick (double dt)
         in[(size_t) c] = juce::jmax (st::dsp::gainToDb (rin.peak[(size_t) ci]), in[(size_t) c] - fall);
         out[(size_t) c] = juce::jmax (st::dsp::gainToDb (rout.peak[(size_t) co]), out[(size_t) c] - fall);
     }
-    const float g = proc.getEngine().grDb.load();
-    gr = juce::jmin (g, gr + fall);
+    live.update (dt, 0.12f);
+    gr = live.grDb;
     const float i = juce::jmax (in[0], in[1]), o = juce::jmax (out[0], out[1]);
     if (i >= inHold || now - inHoldT > 2.0) { inHold = i; inHoldT = now; }
     if (o >= outHold || now - outHoldT > 2.0) { outHold = o; outHoldT = now; }

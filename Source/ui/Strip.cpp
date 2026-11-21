@@ -54,8 +54,9 @@ void DcStrip::resized()
 
 void DcStrip::timerCallback()
 {
-    reader.update();
-    gr = proc.getEngine().grDb.load();
+    // deepest reduction since the last tick, held then released smoothly (readable at 30 fps)
+    const auto peak = reader.peakOfNewest (reader.update());
+    gr = peak.grDb < gr ? peak.grDb : gr + 0.25f * (peak.grDb - gr);
     repaint (historyArea.expanded (2));
     repaint (partArea);
 }
@@ -65,8 +66,13 @@ void DcStrip::paint (juce::Graphics& g)
     const auto& t = st::Theme::get();
     g.setColour (t.bg1);
     g.fillRect (getLocalBounds());
-    // a strip of walnut behind the part label
-    style::paintWood (g, partArea.toFloat(), 0.62f);
+    // the part label sits in a soft brown light
+    {
+        const auto pa = partArea.toFloat();
+        g.setGradientFill (juce::ColourGradient (t.displayGlow.withAlpha (0.42f), pa.getCentreX(), pa.getY() + pa.getHeight() * 0.3f,
+                                                 t.displayGlow.withAlpha (0.0f), pa.getRight() + 10.0f, pa.getBottom(), true));
+        g.fillRect (pa);
+    }
     st::paint::fadedLine (g, { (float) partArea.getRight() - 0.5f, 6.0f }, { (float) partArea.getRight() - 0.5f, (float) getHeight() - 6.0f },
                           juce::Colours::white.withAlpha (0.08f), 1.0f, 0.3f);
 

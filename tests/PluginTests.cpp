@@ -478,9 +478,50 @@ static void testMultiView()
     ed.reset();
 }
 
+/** The spectrum: continuous reads of the analyser history (no skipped / repeated samples), and no flicker while
+    audio arrives in big blocks between UI frames. */
+static void testAnalyzer()
+{
+    std::cout << "Spectrum analyser\n";
+    st::AnalyzerSource src;
+    src.prepare (48000.0);
+    st::SpectrumAnalyzer::Options o;
+    o.fftOrder = 12; o.hopSize = 512; o.numDisplayPoints = 200; o.minHz = 20.0f; o.maxHz = 20000.0f;
+    o.slopeDbPerOct = 0.0f; o.nonConsuming = true; o.smoothingPasses = 0; o.attack = 1.0f;
+    st::SpectrumAnalyzer an (src, o);
+    std::vector<float> block (2048);
+    double phase = 0.0;
+    auto pushSine = [&] (int n)
+    {
+        for (int i = 0; i < n; ++i) { block[(size_t) i] = 0.5f * (float) std::sin (phase); phase += 2.0 * juce::MathConstants<double>::pi * 1000.0 / 48000.0; }
+        const float* ch[1] = { block.data() };
+        src.push (ch, 1, n);
+    };
+    // big host blocks (2048) with 60 fps UI updates in between: the sine must stay clean (continuous reads)
+    for (int b = 0; b < 40; ++b) { pushSine (2048); an.update (1.0 / 60.0); }
+    float peak = -200.0f, far = -200.0f;
+    for (int i = 0; i < an.getNumPoints(); ++i)
+    {
+        const float f = an.getFrequencyForPoint (i), l = an.getLevelsDb()[(size_t) i];
+        if (std::abs (f - 1000.0f) < 60.0f) peak = juce::jmax (peak, l);
+        if (f > 4000.0f) far = juce::jmax (far, l);
+    }
+    check (peak > -12.0f && far < peak - 70.0f, "clean sine in the spectrum (peak " + juce::String (peak, 1) + ", far " + juce::String (far, 1) + " dB)");
+    // a UI frame without new audio (between host blocks) holds the display instead of dipping
+    const auto before = an.getLevelsDb();
+    const bool changed = an.update (1.0 / 60.0);
+    check (! changed && an.getLevelsDb() == before, "no flicker between host blocks");
+    // audio stopped: after a moment the display decays
+    for (int i = 0; i < 30; ++i) an.update (1.0 / 60.0);
+    float after = -200.0f;
+    for (int i = 0; i < an.getNumPoints(); ++i) if (std::abs (an.getFrequencyForPoint (i) - 1000.0f) < 60.0f) after = juce::jmax (after, an.getLevelsDb()[(size_t) i]);
+    check (after < peak - 3.0f, "decays when audio stops");
+}
+
 static int runTests()
 {
     juce::ScopedJuceInitialiser_GUI gui;
+    testAnalyzer();
     testCurves();
     testTiming();
     testNulls();
@@ -514,6 +555,8 @@ struct Snapshotter : juce::Timer
         {
             if (index >= jobs.size()) { stopTimer(); juce::JUCEApplicationBase::quit(); return; }
             if (jobs[index].setup) jobs[index].setup();
+            bool f = true;
+            runNoise (p, 220, 1024, f, 2, 0.9f, 0.015f);   // ~4.7 s of hits, so the level history is full
             ed.reset (p.createEditor());
             ed->setSize (juce::roundToInt ((float) StDcEditor::designWidth * jobs[index].scale),
                          juce::roundToInt ((float) StDcEditor::designHeight * jobs[index].scale));

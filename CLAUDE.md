@@ -11,8 +11,9 @@ verb) and it runs the engine built for it. Built on the shared module in `../st-
 Plugin-specific notes:
 
 - North star: FabFilter Pro-C (level display with GR trace, knee display, threshold handle, style/character split),
-  without FabFilter names or artwork. Look: dark walnut (theme tokens in `Source/ui/Style.cpp::applyTheme`, a
-  procedural wood texture for the backdrop, cheeks and footer tray), copper accent, red gain reduction.
+  without FabFilter names or artwork. Look: near-black with a warm brown cast and soft brown fades, no textures
+  (tokens in `Source/ui/Style.cpp::applyTheme`, backdrop / tray in `paintBackdrop` / `paintTray`), caramel accent,
+  red gain reduction. Live meters / readouts read the `LevelHistory` (`LiveLevels`), never per-chunk atomics.
 - Parameters: `Source/Params.*` (IDs are permanent — never rename). Drum parts and engines: `Source/Roles.*`
   (order is permanent: it is the parameter value). Each part has an engine, a "why" and a starting point;
   `StDcProcessor::selectRole` applies it as one undo step (UI only; automation of `role` only switches the engine).

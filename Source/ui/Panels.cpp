@@ -296,16 +296,7 @@ void FooterBar::refreshText()
 void FooterBar::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    // wooden tray: walnut under a dark lacquer, rounded top corners, faded top light
-    juce::Path bar;
-    bar.addRoundedRectangle (r.getX() + 6.0f, r.getY(), r.getWidth() - 12.0f, r.getHeight() + 20.0f, 18.0f, 18.0f, true, true, false, false);
-    g.saveState();
-    g.reduceClipRegion (bar);
-    style::paintWood (g, r, 0.55f, getPosition().toFloat());
-    g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.03f), 0.0f, r.getY(), juce::Colours::black.withAlpha (0.25f), 0.0f, r.getBottom(), false));
-    g.fillRect (r);
-    g.restoreState();
-    st::paint::fadedLine (g, { r.getX() + 24.0f, r.getY() + 0.5f }, { r.getRight() - 24.0f, r.getY() + 0.5f }, juce::Colours::white.withAlpha (0.12f), 1.0f, 0.15f);
+    style::paintTray (g, r);
 
     for (float x : dividers)
         st::paint::fadedLine (g, { x + 0.5f, r.getY() + 8.0f }, { x + 0.5f, r.getBottom() - 8.0f }, juce::Colours::white.withAlpha (0.10f), 1.0f, 0.5f);

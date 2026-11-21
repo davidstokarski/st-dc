@@ -2,8 +2,8 @@
 
 A drum compressor for every part of the kit. Tell it which part of the kit the track is — **Drum Bus, Kick, Snare,
 Tom, Cymbals, Room or Verb** — and it runs the compression engine built for that part, with a starting point dialled
-in. It is part of the ST family (built on [st-shell](https://github.com/davidstokarski/st-shell)): dark walnut,
-Pro-style level display, and a **Drum Multiview** that shows every drum track in the session with the other ST
+in. It is part of the ST family (built on [st-shell](https://github.com/davidstokarski/st-shell)): near-black with
+soft brown fades, a Pro-style level display, and a **Drum Multiview** that shows every drum track in the session with the other ST
 plug-ins on those tracks.
 
 ![ST DC](docs/screenshot.png)

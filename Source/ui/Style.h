@@ -4,18 +4,16 @@
 namespace stdc::style
 {
 
-/** ST DC's identity: the shared ST tokens recoloured as dark walnut (surfaces, display haze), a copper accent and
-    a red gain-reduction trace (Theme::danger). Called once from the processor constructor. */
+/** ST DC's identity: the shared ST tokens recoloured near-black with a warm brown cast (display haze, fades), a
+    caramel accent and a red gain-reduction trace (Theme::danger). Called once from the processor constructor. */
 void applyTheme();
 
-/** Procedural walnut grain (horizontal, generated once, ~2x the design size). */
-const juce::Image& woodTexture();
+/** The window backdrop: dark brown haze at the top fading to near-black, soft brown light pools, vignette.
+    No texture. */
+void paintBackdrop (juce::Graphics&, juce::Rectangle<float> area);
 
-/** Fills `area` with wood grain (offset so neighbouring areas line up), then darkens it by `shade` (0..1). */
-void paintWood (juce::Graphics&, juce::Rectangle<float> area, float shade, juce::Point<float> textureOffset = {});
-
-/** Wooden side cheek (end panel) with a bevel: lit on its inner edge. `leftSide` mirrors the bevel. */
-void paintCheek (juce::Graphics&, juce::Rectangle<float> area, bool leftSide);
+/** Footer tray: dark, rounded top corners, faint brown fade and a faded top edge light. */
+void paintTray (juce::Graphics&, juce::Rectangle<float> area);
 
 /** Gain-reduction colour (red, like a VU's GR needle). */
 juce::Colour grColour();

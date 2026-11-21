@@ -52,6 +52,7 @@ void Engine::reset() noexcept
     lastColour = 0.0f;
     frameCount = 0;
     frameIn = frameOut = frameGr = 0.0f;
+    frameDet = -120.0f;
 }
 
 void Engine::setQuality (int index)
@@ -185,12 +186,14 @@ void Engine::process (juce::AudioBuffer<float>& main, const juce::AudioBuffer<fl
     frameIn = juce::jmax (frameIn, inPeak);
     frameOut = juce::jmax (frameOut, outPeak);
     frameGr = juce::jmin (frameGr, grMin);
+    frameDet = juce::jmax (frameDet, comp.getDetectorDb());
     frameCount += n;
     while (frameCount >= frameLength)
     {
         frameCount -= frameLength;
-        history.push ({ st::dsp::gainToDb (frameIn, -120.0f), st::dsp::gainToDb (frameOut, -120.0f), frameGr });
+        history.push ({ st::dsp::gainToDb (frameIn, -120.0f), st::dsp::gainToDb (frameOut, -120.0f), frameGr, frameDet });
         frameIn = frameOut = frameGr = 0.0f;
+        frameDet = -120.0f;
     }
 }
 

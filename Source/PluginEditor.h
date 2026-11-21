@@ -10,7 +10,7 @@ public:
     ~StDcEditor() override;
 
     static constexpr int designWidth = 1040, designHeight = 690;
-    static constexpr int cheek = 12, historyY = 44, historyH = 352, spectrumY = 398, spectrumH = 104,
+    static constexpr int historyY = 44, historyH = 352, spectrumY = 398, spectrumH = 104,
                          controlsY = 504, footerHeight = 40;
 
     /** Opens the Drum Multiview (every track with ST DC, plus the other ST plug-ins on those tracks). */

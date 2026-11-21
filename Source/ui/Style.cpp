@@ -5,131 +5,80 @@ namespace stdc::style
 
 void applyTheme()
 {
+    // Near-black with a warm brown cast: neutral enough to read like a studio tool, brown in the fades and accents.
     auto& t = st::Theme::get();
-    t.bg0 = juce::Colour (0xff0d0907);
-    t.bg1 = juce::Colour (0xff16100c);
-    t.bg2 = juce::Colour (0xff1f1712);
-    t.bg3 = juce::Colour (0xff2b2119);
-    t.bg4 = juce::Colour (0xff3b2e24);
-    t.stroke = juce::Colour (0xff3b2f25);
-    t.strokeSoft = juce::Colour (0xff241b15);
-    t.displayTop = juce::Colour (0xff2c1d13);
-    t.displayGlow = juce::Colour (0xff6a4122);
-    t.glassPanel = juce::Colour (0xb02a2019);
-    t.knobLight = juce::Colour (0xffbfb8b0);
-    t.knobDark = juce::Colour (0xff6f675f);
-    t.buttonTop = juce::Colour (0xff5f5751);
-    t.buttonBottom = juce::Colour (0xff453e38);
-    t.text = juce::Colour (0xfff1e9e0);
-    t.textDim = juce::Colour (0xffb9a999);
-    t.textFaint = juce::Colour (0xff7d6c5d);
-    t.accent = juce::Colour (0xffd2772b);     // copper
-    t.accent2 = juce::Colour (0xffffa851);    // warm amber
-    t.spectrum = juce::Colour (0xffdcb894);
-    t.curve = juce::Colour (0xfff4dcae);
-    t.danger = juce::Colour (0xffec4b3c);
+    t.bg0 = juce::Colour (0xff0a0908);
+    t.bg1 = juce::Colour (0xff11100e);
+    t.bg2 = juce::Colour (0xff191613);
+    t.bg3 = juce::Colour (0xff221e1a);
+    t.bg4 = juce::Colour (0xff2e2823);
+    t.stroke = juce::Colour (0xff2c2622);
+    t.strokeSoft = juce::Colour (0xff1b1815);
+    t.highlight = juce::Colour (0x12ffffff);
+    t.displayTop = juce::Colour (0xff1d1610);    // dark walnut haze at the top of the window
+    t.displayGlow = juce::Colour (0xff3e2b1c);   // warm light (selected part, top glow)
+    t.glassPanel = juce::Colour (0xb81c1815);
+    t.knobLight = juce::Colour (0xffb9b5b1);
+    t.knobDark = juce::Colour (0xff6b6763);
+    t.buttonTop = juce::Colour (0xff56514d);
+    t.buttonBottom = juce::Colour (0xff3e3a37);
+    t.text = juce::Colour (0xffeee9e4);
+    t.textDim = juce::Colour (0xffa9a098);
+    t.textFaint = juce::Colour (0xff6d655e);
+    t.accent = juce::Colour (0xffc4834d);        // caramel / copper
+    t.accent2 = juce::Colour (0xffe3b483);       // warm sand
+    t.spectrum = juce::Colour (0xffc8b8a8);
+    t.curve = juce::Colour (0xfff0dfc8);
+    t.danger = juce::Colour (0xffe2513f);        // gain reduction
+    t.warning = juce::Colour (0xffe8c15a);
 }
 
 juce::Colour grColour() { return st::Theme::get().danger; }
 
-//==============================================================================
-namespace
+void paintBackdrop (juce::Graphics& g, juce::Rectangle<float> r)
 {
-    inline uint32_t hash (int x, int y) noexcept
-    {
-        uint32_t h = (uint32_t) x * 374761393u + (uint32_t) y * 668265263u;
-        h = (h ^ (h >> 13)) * 1274126177u;
-        return h ^ (h >> 16);
-    }
-    inline float lattice (int x, int y) noexcept { return (float) (hash (x, y) & 0xffff) / 65535.0f; }
-
-    /** Smooth value noise, 0..1. */
-    float noise (float x, float y) noexcept
-    {
-        const int xi = (int) std::floor (x), yi = (int) std::floor (y);
-        float fx = x - (float) xi, fy = y - (float) yi;
-        fx = fx * fx * (3.0f - 2.0f * fx);
-        fy = fy * fy * (3.0f - 2.0f * fy);
-        const float a = lattice (xi, yi), b = lattice (xi + 1, yi), c = lattice (xi, yi + 1), d = lattice (xi + 1, yi + 1);
-        return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
-    }
-
-    juce::Image makeWood()
-    {
-        constexpr int W = 2200, H = 1440;   // texture pixels; drawn at 2 px per design px
-        juce::Image img (juce::Image::RGB, W, H, false);
-        juce::Image::BitmapData bd (img, juce::Image::BitmapData::writeOnly);
-
-        // walnut: dark heartwood, lighter late-wood streaks, a little red in the mids
-        const juce::Colour dark (0xff160d07), mid (0xff3a2414), light (0xff6a4426);
-        for (int y = 0; y < H; ++y)
-        {
-            const float v = (float) y * 0.5f;
-            for (int x = 0; x < W; ++x)
-            {
-                const float u = (float) x * 0.5f;
-                // growth rings: horizontal bands warped by low-frequency noise (figure), stretched along x
-                const float warp = 22.0f * noise (u * 0.0035f, v * 0.018f) + 7.0f * noise (u * 0.012f + 31.0f, v * 0.06f);
-                const float ring = std::sin ((v + warp) * 0.21f);
-                const float band = std::pow (std::abs (ring), 0.55f);
-                // pores / fine streaks: long in x, thin in y
-                const float fine = noise (u * 0.018f + 7.0f, v * 0.9f);
-                const float streak = noise (u * 0.004f, v * 0.25f + 13.0f);
-                const float broad = noise (u * 0.0016f + 3.0f, v * 0.003f);
-                float tt = 0.42f * band + 0.26f * fine + 0.18f * streak + 0.14f * broad;
-                tt = juce::jlimit (0.0f, 1.0f, (tt - 0.18f) * 1.35f);
-                const auto c = tt < 0.5f ? dark.interpolatedWith (mid, tt * 2.0f) : mid.interpolatedWith (light, (tt - 0.5f) * 2.0f);
-                bd.setPixelColour (x, y, c);
-            }
-        }
-        return img;
-    }
-}
-
-const juce::Image& woodTexture()
-{
-    static const juce::Image img = makeWood();
-    return img;
-}
-
-void paintWood (juce::Graphics& g, juce::Rectangle<float> area, float shade, juce::Point<float> offset)
-{
-    const auto& img = woodTexture();
-    g.saveState();
-    g.reduceClipRegion (area.toNearestIntEdges());
-    // 2 texture pixels per design pixel; the texture is aligned to the editor (offset = area's position in it)
-    const auto src = juce::Rectangle<float> ((area.getX() + offset.x) * 2.0f, (area.getY() + offset.y) * 2.0f,
-                                             area.getWidth() * 2.0f, area.getHeight() * 2.0f)
-                         .getIntersection (img.getBounds().toFloat());
-    g.drawImage (img, juce::roundToInt (area.getX()), juce::roundToInt (area.getY()), juce::roundToInt (area.getWidth()), juce::roundToInt (area.getHeight()),
-                 (int) src.getX(), (int) src.getY(), juce::jmax (1, (int) src.getWidth()), juce::jmax (1, (int) src.getHeight()));
-    if (shade > 0.0f)
-    {
-        g.setColour (juce::Colours::black.withAlpha (juce::jlimit (0.0f, 1.0f, shade)));
-        g.fillRect (area);
-    }
-    g.restoreState();
-}
-
-void paintCheek (juce::Graphics& g, juce::Rectangle<float> r, bool leftSide)
-{
-    paintWood (g, r, 0.18f);
-    // oil sheen: lighter in the upper middle, darker to the bottom
-    g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.05f), r.getCentreX(), r.getY() + r.getHeight() * 0.25f,
-                                             juce::Colours::black.withAlpha (0.45f), r.getCentreX(), r.getBottom(), false));
+    const auto& t = st::Theme::get();
+    // base: dark brown at the top fading to near-black
+    juce::ColourGradient base (t.displayTop, r.getCentreX(), r.getY(), t.bg0, r.getCentreX(), r.getBottom(), false);
+    base.addColour (0.42, t.displayTop.interpolatedWith (t.bg0, 0.55f));
+    base.addColour (0.78, t.bg1.interpolatedWith (t.bg0, 0.5f));
+    g.setGradientFill (base);
     g.fillRect (r);
-    // bevels: lit inner edge, dark outer edge, both fading at the ends
-    const float inner = leftSide ? r.getRight() - 1.0f : r.getX();
-    const float outer = leftSide ? r.getX() : r.getRight() - 1.0f;
-    st::paint::fadedLine (g, { inner + 0.5f, r.getY() }, { inner + 0.5f, r.getBottom() }, juce::Colours::white.withAlpha (0.14f), 1.0f, 0.08f);
-    g.setColour (juce::Colours::black.withAlpha (0.55f));
-    g.fillRect (juce::Rectangle<float> (outer, r.getY(), 1.0f, r.getHeight()));
-    // shadow cast onto the display
-    const float sx = leftSide ? r.getRight() : r.getX() - 10.0f;
-    juce::ColourGradient shadow (juce::Colours::black.withAlpha (0.35f), leftSide ? r.getRight() : r.getX(), 0.0f,
-                                 juce::Colours::transparentBlack, leftSide ? r.getRight() + 10.0f : r.getX() - 10.0f, 0.0f, false);
-    g.setGradientFill (shadow);
-    g.fillRect (juce::Rectangle<float> (sx, r.getY(), 10.0f, r.getHeight()));
+
+    // brown fades: a wide warm light over the top centre, softer pools low left and right
+    auto pool = [&] (juce::Point<float> c, float radius, juce::Colour col, float alpha)
+    {
+        juce::ColourGradient rg (col.withAlpha (alpha), c.x, c.y, col.withAlpha (0.0f), c.x + radius, c.y, true);
+        g.setGradientFill (rg);
+        g.fillRect (r);
+    };
+    pool ({ r.getCentreX(), r.getY() - r.getHeight() * 0.1f }, r.getWidth() * 0.62f, t.displayGlow, 0.38f);
+    pool ({ r.getX() + r.getWidth() * 0.08f, r.getY() + r.getHeight() * 0.72f }, r.getWidth() * 0.34f, t.displayGlow, 0.14f);
+    pool ({ r.getRight() - r.getWidth() * 0.06f, r.getY() + r.getHeight() * 0.40f }, r.getWidth() * 0.30f, t.displayGlow, 0.12f);
+
+    // vignette towards the corners
+    juce::ColourGradient vignette (juce::Colours::transparentBlack, r.getCentreX(), r.getY() + r.getHeight() * 0.42f,
+                                   juce::Colours::black.withAlpha (0.42f), r.getX() - r.getWidth() * 0.05f, r.getY() + r.getHeight() * 0.42f, true);
+    g.setGradientFill (vignette);
+    g.fillRect (r);
+}
+
+void paintTray (juce::Graphics& g, juce::Rectangle<float> r)
+{
+    const auto& t = st::Theme::get();
+    juce::Path bar;
+    bar.addRoundedRectangle (r.getX() + 6.0f, r.getY(), r.getWidth() - 12.0f, r.getHeight() + 20.0f, 16.0f, 16.0f, true, true, false, false);
+    g.setGradientFill (juce::ColourGradient (t.bg2.withAlpha (0.92f), 0.0f, r.getY(), t.bg0.withAlpha (0.96f), 0.0f, r.getBottom(), false));
+    g.fillPath (bar);
+    // a faint brown fade in the middle of the tray
+    g.saveState();
+    g.reduceClipRegion (bar);
+    g.setGradientFill (juce::ColourGradient (t.displayGlow.withAlpha (0.16f), r.getCentreX(), r.getY(),
+                                             t.displayGlow.withAlpha (0.0f), r.getCentreX() + r.getWidth() * 0.45f, r.getY(), true));
+    g.fillRect (r);
+    g.restoreState();
+    st::paint::fadedLine (g, { r.getX() + 24.0f, r.getY() + 0.5f }, { r.getRight() - 24.0f, r.getY() + 0.5f },
+                          juce::Colours::white.withAlpha (0.10f), 1.0f, 0.18f);
 }
 
 //==============================================================================

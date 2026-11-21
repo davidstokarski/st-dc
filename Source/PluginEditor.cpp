@@ -78,15 +78,15 @@ void StDcEditor::toggleMultiView()
 void StDcEditor::layout (juce::Rectangle<int>)
 {
     const auto all = getContent().getLocalBounds();
-    const int inner = designWidth - 2 * cheek;
-    history.setBounds (cheek, historyY, inner, historyH);
-    roles.setBounds (cheek + 8, historyY + 12, 118, RoleSelector::preferredHeight());
-    history.setPlotLeft ((float) (roles.getRight() - cheek + 6));
+    const int inner = designWidth;
+    history.setBounds (0, historyY, inner, historyH);
+    roles.setBounds (16, historyY + 12, 118, RoleSelector::preferredHeight());
+    history.setPlotLeft ((float) (roles.getRight() + 6));
     history.setPlotRight ((float) (inner - 184));
-    knee.setBounds (designWidth - cheek - 170, historyY + 14, 156, 156);
+    knee.setBounds (designWidth - 176, historyY + 14, 156, 156);
     meters.setBounds (knee.getX(), knee.getBottom() + 12, 156, historyY + historyH - knee.getBottom() - 18);
-    spectrum.setBounds (cheek, spectrumY, inner, spectrumH);
-    controls.setBounds (cheek + 4, controlsY, inner - 8, ControlBar::height);
+    spectrum.setBounds (0, spectrumY, inner, spectrumH);
+    controls.setBounds (12, controlsY, inner - 24, ControlBar::height);
     footer.setBounds (all.withTop (designHeight - footerHeight));
     if (multiView != nullptr) multiView->setBounds (all);
 }
@@ -110,26 +110,8 @@ void StDcEditor::paintBackground (juce::Graphics& g, juce::Rectangle<int> area)
 
 void StDcEditor::renderBackdrop (juce::Graphics& g, juce::Rectangle<float> r)
 {
-    const auto& t = st::Theme::get();
-    // walnut under a deep lacquer: the grain shows faintly through the display
-    style::paintWood (g, r, 0.0f);
-    juce::ColourGradient lacquer (t.displayTop.withAlpha (0.80f), r.getCentreX(), r.getY(), t.bg0.withAlpha (0.93f), r.getCentreX(), r.getBottom(), false);
-    lacquer.addColour (0.5, t.displayTop.interpolatedWith (t.bg0, 0.6f).withAlpha (0.86f));
-    g.setGradientFill (lacquer);
-    g.fillRect (r);
-    // warm light from the top centre, vignette towards the corners
-    g.setGradientFill (juce::ColourGradient (t.displayGlow.withAlpha (0.16f), r.getCentreX(), r.getY() + 40.0f,
-                                             juce::Colours::transparentBlack, r.getCentreX(), r.getY() + r.getHeight() * 0.6f, true));
-    g.fillRect (r);
-    g.setGradientFill (juce::ColourGradient (juce::Colours::transparentBlack, r.getCentreX(), r.getY() + r.getHeight() * 0.4f,
-                                             juce::Colours::black.withAlpha (0.35f), r.getX(), r.getY() + r.getHeight() * 0.4f, true));
-    g.fillRect (r);
-
+    style::paintBackdrop (g, r);
     // a faded divider between the level display and the spectrum
-    st::paint::fadedLine (g, { (float) cheek + 20.0f, (float) spectrumY - 2.5f }, { r.getRight() - (float) cheek - 20.0f, (float) spectrumY - 2.5f },
-                          juce::Colours::white.withAlpha (0.07f), 1.0f, 0.12f);
-
-    // wooden cheeks
-    style::paintCheek (g, { r.getX(), r.getY(), (float) cheek, r.getHeight() }, true);
-    style::paintCheek (g, { r.getRight() - (float) cheek, r.getY(), (float) cheek, r.getHeight() }, false);
+    st::paint::fadedLine (g, { r.getX() + 24.0f, (float) spectrumY - 2.5f }, { r.getRight() - 24.0f, (float) spectrumY - 2.5f },
+                          juce::Colours::white.withAlpha (0.06f), 1.0f, 0.18f);
 }

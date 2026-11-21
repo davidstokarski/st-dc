@@ -20,6 +20,8 @@ public:
         return frames[(size_t) ((head - 1 - ago + 2 * (int) frames.size()) % (int) frames.size())];
     }
     double getFrameRate() const noexcept { return history.getFrameRate(); }
+    /** Peaks (max levels, deepest GR) of the newest n frames. */
+    LevelHistory::Frame peakOfNewest (int n) const noexcept;
 
 private:
     const LevelHistory& history;
@@ -27,6 +29,21 @@ private:
     int head = 0, filled = 0;
     uint32_t last = 0;
     bool primed = false;
+};
+
+//==============================================================================
+/** Live values for meters / readouts, read from the history (so no hit between two UI frames is missed) with
+    display ballistics: instant attack, smooth release. */
+class LiveLevels
+{
+public:
+    explicit LiveLevels (const LevelHistory& h) : reader (h, 256) {}
+    /** Returns true when a value moved visibly. */
+    bool update (double dt, float releaseSeconds = 0.18f);
+    float grDb = 0.0f, detDb = -120.0f, inDb = -120.0f, outDb = -120.0f;
+
+private:
+    HistoryReader reader;
 };
 
 //==============================================================================
@@ -90,7 +107,7 @@ public:
 private:
     StDcProcessor& proc;
     st::SpectrumAnalyzer input, output;
-    float grSmoothed = 0.0f;
+    LiveLevels live;
     bool hover = false, dragging = false;
     static constexpr float minHz = 20.0f, maxHz = 20000.0f, minDb = -90.0f, maxDb = 0.0f;
 
@@ -111,6 +128,7 @@ public:
 
 private:
     StDcProcessor& proc;
+    LiveLevels live;
     float liveDb = -120.0f;
     CompSettings lastSettings;
     juce::Path curve;
@@ -129,6 +147,7 @@ public:
 
 private:
     StDcProcessor& proc;
+    LiveLevels live;
     std::array<float, 2> in { -120.0f, -120.0f }, out { -120.0f, -120.0f };
     float gr = 0.0f, inHold = -120.0f, outHold = -120.0f, grHold = 0.0f;
     double inHoldT = 0.0, outHoldT = 0.0, grHoldT = 0.0;

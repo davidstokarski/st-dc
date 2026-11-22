@@ -462,6 +462,42 @@ static void testMultiView()
         check (bus->param (ids::threshold).getValue() > before + 0.05f, "editing the module edits that instance");
     }
 
+    // pins are shared by every ST plug-in's multiview: a pinned drum track goes to the top here; a pinned track
+    // without ST DC (pinned from another plug-in) isn't shown here, and stays pinned for the others
+    {
+        bool hiddenPin = false;
+#if JUCE_MAC
+        hiddenPin = eq != nullptr;   // ST EQ on "Vocal" (another binary)
+#endif
+        reg.unpinRows (reg.getPinnedRows());
+        reg.setRowPinned ("t:Kick In", true);
+        if (hiddenPin) reg.setRowPinned ("t:Vocal", true);
+        reg.flush();
+        check (mv->getNumRows() == 2 && mv->isRowPinned (0) && ! mv->isRowPinned (1)
+                   && mv->getRowKinds (0).contains ("ST DC") && mv->getModuleComponent (kick->getInstanceUid()) != nullptr,
+               "a pinned drum track goes to the top of the Drum Multiview");
+        bool hiddenShown = false;
+        for (int r = 0; r < mv->getNumRows(); ++r) hiddenShown |= mv->getRowKinds (r).contains ("ST EQ");
+        check (! hiddenShown, "a pinned track without ST DC is not shown");
+        if (hiddenPin) check (reg.isRowPinned ("t:Vocal"), "the hidden pin stays pinned (the Drum Multiview doesn't drop it)");
+
+        // another instance's (unfiltered) multiview shows the same pins, at the top
+        auto countPinned = [] (const st::MultiView& v) { int n = 0; for (int r = 0; r < v.getNumRows(); ++r) n += v.isRowPinned (r) ? 1 : 0; return n; };
+        st::MultiView all (*bus);
+        all.refresh();
+        const int expected = hiddenPin ? 2 : 1;
+        check (countPinned (all) == expected && all.isRowPinned (expected - 1),
+               "pins show in every multiview (" + juce::String (countPinned (all)) + " pinned rows)");
+
+        // unpinning in one multiview unpins it in the others
+        mv->setRowPinned (0, false);
+        reg.flush();
+        check (! reg.isRowPinned ("t:Kick In") && countPinned (all) == expected - 1, "unpinned in every multiview");
+        check (countPinned (*mv) == 0, "nothing pinned in the Drum Multiview");
+        reg.unpinRows (reg.getPinnedRows());
+        reg.flush();
+    }
+
     // a part changes: the rows re-sort (snare after kick); a removed instance leaves
     {
         juce::Image img (juce::Image::ARGB, mv->getWidth(), mv->getHeight(), true);

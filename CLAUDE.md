@@ -34,5 +34,7 @@ Plugin-specific notes:
 - Verify: `StDcPluginTests` (engine curves / timing, bypass + mix nulls per oversampling, stress over parts / engines
   / block sizes, side-chain, state, presets, multiview with the installed ST Sat / ST EQ AUs),
   `StDcPluginTests --snapshot <dir>` (look at the PNGs), `auval -v aufx Stdc StAu`.
+  Website videos: `StDcPluginTests --video <dir> [scene ...]` (`tests/VideoRender.cpp`, on the shell's
+  `st_shell/testing/st_video.h`): scenes snare-punch, room-crush.
 - Release: `scripts/release.sh`.
 - Anything reusable belongs in st-shell, not here.

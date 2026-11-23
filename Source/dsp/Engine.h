@@ -5,41 +5,6 @@
 namespace stdc
 {
 
-/** Level / gain-reduction history for the scrolling display: one frame every ~4 ms, written by the audio thread,
-    read by any number of UI readers without consuming it (editor display, multiview modules). */
-class LevelHistory
-{
-public:
-    static constexpr int kSize = 4096;   // ~16 s of frames
-    /** One frame: input / output / detector peaks and the deepest gain reduction in it. */
-    struct Frame { float inDb = -120.0f, outDb = -120.0f, grDb = 0.0f, detDb = -120.0f; };
-
-    void push (const Frame& f) noexcept
-    {
-        const uint32_t w = written.load (std::memory_order_relaxed);
-        auto& slot = frames[(size_t) (w & (kSize - 1))];
-        slot[0].store (f.inDb, std::memory_order_relaxed);
-        slot[1].store (f.outDb, std::memory_order_relaxed);
-        slot[2].store (f.grDb, std::memory_order_relaxed);
-        slot[3].store (f.detDb, std::memory_order_relaxed);
-        written.store (w + 1, std::memory_order_release);
-    }
-    uint32_t getWritten() const noexcept { return written.load (std::memory_order_acquire); }
-    Frame read (uint32_t index) const noexcept
-    {
-        const auto& slot = frames[(size_t) (index & (kSize - 1))];
-        return { slot[0].load (std::memory_order_relaxed), slot[1].load (std::memory_order_relaxed),
-                 slot[2].load (std::memory_order_relaxed), slot[3].load (std::memory_order_relaxed) };
-    }
-    void setFrameRate (double hz) noexcept { frameRate.store (hz); }
-    double getFrameRate() const noexcept { return frameRate.load(); }
-
-private:
-    std::array<std::array<std::atomic<float>, 4>, kSize> frames {};
-    std::atomic<uint32_t> written { 0 };
-    std::atomic<double> frameRate { 250.0 };
-};
-
 struct EngineSettings
 {
     CompSettings comp;
@@ -81,7 +46,7 @@ public:
     std::atomic<float> grDb { 0.0f };          // deepest gain reduction of the last block
     std::atomic<float> detectorDb { -120.0f }; // detector (input) peak of the last block
     std::atomic<float> makeupDb { 0.0f };      // current make-up gain (auto)
-    LevelHistory history;
+    st::LevelHistory history;   // what the displays read (gain change <= 0 here)
 
     const Compressor& getCompressor() const noexcept { return comp; }
 

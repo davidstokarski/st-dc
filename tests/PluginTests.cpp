@@ -560,10 +560,10 @@ static void testAnalyzer()
 static void testHistoryMotion()
 {
     std::cout << "Level display motion\n";
-    LevelHistory hist;
+    st::LevelHistory hist;
     hist.setFrameRate (250.0);
-    HistoryReader raw (hist, 2048, 0.0f), smooth (hist, 2048, 260.0f);
-    SmoothScroll scroll;
+    st::HistoryReader raw (hist, 2048, 0.0f), smooth (hist, 2048, 260.0f);
+    st::SmoothScroll scroll;
     juce::Random rng (7);
     double audioClock = 0.0, uiClock = 0.0, framesDue = 0.0;
     const double block = 1024.0 / 48000.0;   // host block: 1024 samples = 5.33 frames at a time
@@ -597,7 +597,7 @@ static void testHistoryMotion()
     check (worst < 0.6, "scroll glides evenly despite block bursts (worst deviation " + juce::String (worst, 3) + " frames)");
     check (maxLag < 40.0, "display stays close behind the audio (" + juce::String (maxLag, 1) + " frames)");
 
-    auto roughness = [] (const HistoryReader& r)
+    auto roughness = [] (const st::HistoryReader& r)
     {
         double sum = 0.0;
         for (int i = 1; i < 400; ++i) sum += std::abs (r.get (i).outDb - r.get (i - 1).outDb);

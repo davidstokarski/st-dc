@@ -108,7 +108,7 @@ void DcStrip::paint (juce::Graphics& g)
     constexpr float range = 48.0f;
     auto yOf = [&] (float db) { return juce::jmap (juce::jlimit (-range, 0.0f, db), -range, 0.0f, h.getBottom() - 3.0f, h.getY() + 3.0f); };
     const double fpp = 3.0 * reader.getFrameRate() / (double) juce::jmax (1.0f, h.getWidth());   // 3 seconds
-    HistoryPaths paths;
+    st::HistoryPaths paths;
     paths.build (reader, scroll.getPosition(), h.getX() - 2.0f, h.getRight(), fpp, yOf,
                  [&] (float grDb) { return juce::jmap (juce::jlimit (0.0f, range, -grDb), 0.0f, range, h.getY() + 3.0f, h.getBottom() - 3.0f); },
                  h.getBottom(), h.getY());

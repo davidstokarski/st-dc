@@ -62,6 +62,18 @@ std::vector<Scene> scenes()
         dir.dragBy ({ 0.0f, 55.0f }, 1.2);                            // blend it back under the dry kit
         dir.wait (2.8);
     } });
+
+    // 3. The website reel's ST DC segment: the Snare part compressing the kit, no pointer (it waits off screen).
+    //    The reel takes 4.3 s of it (from 1.5 s) between the ST Sat and ST Split segments, 0.5 s cross-fades.
+    v.push_back ({ "reel", 7.0, [] (juce::AudioProcessor& p, Music& m)
+    {
+        m.drums = 1.0f; m.rooms = 0.3f;
+        if (auto* dc = dynamic_cast<StDcProcessor*> (&p)) dc->selectRole ((int) stdc::Role::snare);
+    }, [] (Director& dir)
+    {
+        dir.move ([] { return juce::Point<float> (-200.0f, -200.0f); }, 0.01);
+        dir.wait (7.0);
+    } });
     return v;
 }
 }

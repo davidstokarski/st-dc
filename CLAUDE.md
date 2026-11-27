@@ -35,6 +35,7 @@ Plugin-specific notes:
   / block sizes, side-chain, state, presets, multiview with the installed ST Sat / ST EQ AUs),
   `StDcPluginTests --snapshot <dir>` (look at the PNGs), `auval -v aufx Stdc StAu`.
   Website videos: `StDcPluginTests --video <dir> [scene ...]` (`tests/VideoRender.cpp`, on the shell's
-  `st_shell/testing/st_video.h`): scenes snare-punch, room-crush.
+  `st_shell/testing/st_video.h`): scenes snare-punch, room-crush, and reel (no pointer: 5.3 s of it from 1.5 s is ST DC's segment
+  of the website reel, between ST Sat and ST Split with 0.5 s cross-fades).
 - Release: `scripts/release.sh`.
 - Anything reusable belongs in st-shell, not here.

@@ -26,8 +26,8 @@ The builds are ad-hoc signed; if macOS blocks them run
 | Room | **FET All** — FET with every ratio engaged: over-compressing curve, faster release, much more distortion | "All buttons in" with the fastest attack and release is the standard room-mic crush: aggressive, distorted, pumping, bringing up the room and shell resonance. Starts at 70% mix so some of the room's own sound stays. |
 | Verb | **Vari-Mu** — tube feedback compressor whose ratio rises gradually with gain reduction, with even harmonics | I didn't find a clear published convention for compressing reverb returns, so this one is a judgment call: a very soft-kneed, slow, tube-coloured compressor makes the tail denser and more even without clamping it. For ducking the verb under the dry kit, use the **Verb Ducker (Side-Chain)** preset and feed the dry drums into the side-chain. |
 
-You can run any engine on any part (the **Engine** menu above the threshold): the part's row then shows the override
-in amber.
+You can run any engine on any part with the **Engine** menu above the threshold; the engine that's running is named
+at the top left of the level display.
 
 Sources used for the choices above: Vintage King, ["The best compressors for mixing drums"](https://vintageking.com/blog/the-best-compressors-for-mixing-drums/);
 Sweetwater, ["All-button mode: Universal Audio 1176"](https://www.sweetwater.com/insync/all-button-mode-universal-audio-1176-really-explosive-drum/);

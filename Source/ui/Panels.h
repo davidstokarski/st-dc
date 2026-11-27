@@ -4,7 +4,7 @@
 namespace stdc
 {
 
-/** The drum-part selector: one lit row per part (glyph, name and the engine it runs). Picking a part switches the
+/** The drum-part selector: one lit row per part (glyph and name). Picking a part switches the
     engine and moves the controls to that part's starting point (one undo step). */
 class RoleSelector : public juce::Component, public juce::SettableTooltipClient, private juce::Timer
 {
@@ -22,7 +22,7 @@ public:
 
 private:
     StDcProcessor& proc;
-    int hover = -1, role = -1, engine = -1;
+    int hover = -1, role = -1;
     st::Animated lit;   // selection glides between rows
     juce::Rectangle<float> rowBounds (int i) const;
     int rowAt (juce::Point<float>) const;

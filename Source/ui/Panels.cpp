@@ -25,10 +25,9 @@ int RoleSelector::rowAt (juce::Point<float> p) const
 
 void RoleSelector::timerCallback()
 {
-    const int r = proc.getRole(), e = proc.apvts.getRawParameterValue (ids::engine)->load() > 0.5f ? (int) proc.getAlgorithm() : -1;
-    bool dirty = r != role || e != engine;
+    const int r = proc.getRole();
+    bool dirty = r != role;
     role = r;
-    engine = e;
     lit.setTarget ((float) role);
     dirty |= lit.tick (1.0 / 60.0, 16.0f);
     if (dirty) repaint();
@@ -58,18 +57,10 @@ void RoleSelector::paint (juce::Graphics& g)
         const auto glyphCol = sel ? t.accent2 : (over ? t.text : t.textDim.withAlpha (0.85f));
         style::drawRoleGlyph (g, i, juce::Rectangle<float> (24.0f, 24.0f).withCentre ({ r.getX() + 22.0f, r.getCentreY() }), glyphCol, sel ? 1.6f : 1.3f);
 
-        auto text = r.withTrimmedLeft (42.0f);
+        // just the part's name (the engine is in the Engine menu above the threshold)
         g.setFont (st::fonts::semibold (13.0f));
         g.setColour (sel ? t.text : (over ? t.text.withAlpha (0.9f) : t.textDim));
-        g.drawText (info.name, text.removeFromTop (r.getHeight() * 0.56f).withTrimmedTop (3.0f), juce::Justification::bottomLeft, false);
-
-        // the engine this part runs (the override engine, in amber, for the selected part when it's set)
-        const bool overridden = sel && engine >= 0;
-        const juce::String eng = overridden ? juce::String (getAlgorithmInfo (engine).name) + juce::String (juce::CharPointer_UTF8 (" \xe2\x80\xa2"))
-                                            : juce::String (getAlgorithmInfo ((int) info.algorithm).name);
-        g.setFont (st::fonts::medium (10.5f));
-        g.setColour (overridden ? t.accent2 : (sel ? t.textDim : t.textFaint));
-        g.drawText (eng, text.withTrimmedTop (1.0f), juce::Justification::topLeft, false);
+        g.drawText (info.name, r.withTrimmedLeft (42.0f), juce::Justification::centredLeft, false);
     }
 }
 

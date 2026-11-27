@@ -84,3 +84,7 @@ auval -v aufx Stdc StAu
 Uses `../st-shell` when it is checked out next to this repo, otherwise fetches it. Release: `scripts/release.sh`.
 
 Inter typeface © The Inter Project Authors, SIL Open Font License.
+
+## Contributing
+
+See the shared [contributor notes](https://github.com/davidstokarski/st-shell/blob/main/CONTRIBUTING.md) in ST Shell. All PRs to `main` need approval from @davidstokarski.

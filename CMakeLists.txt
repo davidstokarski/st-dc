@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(STDC VERSION 0.1.3 LANGUAGES C CXX)
+project(STDC VERSION 0.1.4 LANGUAGES C CXX)
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Universal binary")

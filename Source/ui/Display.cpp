@@ -211,7 +211,7 @@ namespace
     {
         st::SpectrumAnalyzer::Options o;
         o.fftOrder = 12;
-        o.hopSize = 512;
+        o.hopSize = 0;   // a fresh FFT every display frame (in step with the monitor)
         o.numDisplayPoints = 320;
         o.minHz = 20.0f;
         o.maxHz = 20000.0f;
